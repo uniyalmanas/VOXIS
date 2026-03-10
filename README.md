@@ -30,6 +30,6 @@ source voxis_env/Scripts/activate
 pip install -r requirements.txt
 python main.py
 ```
-
+"VOXIS — you talk to it naturally, it understands what you want, and makes it happen. On your computer, in your home, in your life. Privately. Locally. Intelligently."
 ## Status
 🔨 Active Development — Phase 1 Complete

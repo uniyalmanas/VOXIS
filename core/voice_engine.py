@@ -6,8 +6,17 @@ import time
 
 class VoiceEngine:
     def __init__(self):
+        
         self.recognizer = sr.Recognizer()
+        self.recognizer.energy_threshold = 300
+        self.recognizer.dynamic_energy_threshold = False
+        self.recognizer.pause_threshold = 0.5
         self.microphone = sr.Microphone()
+        # Calibrate microphone once at startup
+        with self.microphone as source:
+           self.recognizer.adjust_for_ambient_noise(source, duration=1)
+        print("Microphone calibrated ✅")
+
         self.speaker = pyttsx3.init()
         self.speaker.setProperty('rate', 175)
         self.speaker.setProperty('volume', 1.0)
@@ -67,33 +76,30 @@ class VoiceEngine:
         self.speaker.runAndWait()
 
     def listen(self):
-        try:
-            with self.microphone as source:
-                self.recognizer.adjust_for_ambient_noise(
-                    source, duration=0.1
-                )
-                audio = self.recognizer.listen(
-                    source,
-                    timeout=5,
-                    phrase_time_limit=4
-                )
-            text = self.recognizer.recognize_google(
-                audio,
-                language="en-IN"
-            ).lower()
-            return text
-        except sr.WaitTimeoutError:
-            return ""
-        except sr.UnknownValueError:
-            return ""
-        except sr.RequestError as e:
-            print(f"API Error: {e}")
-            return ""
-        except KeyboardInterrupt:
-            raise
-        except Exception:
-            return ""
-
+       try:
+           with self.microphone as source:
+               audio = self.recognizer.listen(
+                   source,
+                   timeout=3,
+                   phrase_time_limit=3
+               )
+           text = self.recognizer.recognize_google(
+               audio,
+               language="en-IN"
+           ).lower()
+           return text
+       except sr.WaitTimeoutError:
+           return ""
+       except sr.UnknownValueError:
+           return ""
+       except sr.RequestError as e:
+           print(f"API Error: {e}")
+           return ""
+       except KeyboardInterrupt:
+           raise
+       except Exception:
+           return ""
+   
     def execute_command(self, command):
         for key in self.commands:
             if key in command:
