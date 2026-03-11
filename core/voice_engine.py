@@ -11,6 +11,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from ai_brain import AIBrain
 
 class VoiceEngine:
+    # Layer 1 — Fast commands, bypass AI completely
+    FAST_COMMANDS = {
+        "volume up":    lambda: [pyautogui.press('volumeup') for _ in range(10)],
+        "volume down":  lambda: [pyautogui.press('volumedown') for _ in range(10)],
+        "mute":         lambda: pyautogui.press('volumemute'),
+        "screenshot":   lambda: pyautogui.hotkey('win', 'shift', 's'),
+        "scroll up":    lambda: pyautogui.scroll(5),
+        "scroll down":  lambda: pyautogui.scroll(-5),
+        "close":        lambda: pyautogui.hotkey('alt', 'f4'),
+        "new tab":      lambda: pyautogui.hotkey('ctrl', 't'),
+        "close tab":    lambda: pyautogui.hotkey('ctrl', 'w'),
+        "go back":      lambda: pyautogui.hotkey('alt', 'left'),
+        "copy":         lambda: pyautogui.hotkey('ctrl', 'c'),
+        "paste":        lambda: pyautogui.hotkey('ctrl', 'v'),
+        "select all":   lambda: pyautogui.hotkey('ctrl', 'a'),
+        "undo":         lambda: pyautogui.hotkey('ctrl', 'z'),
+    }
+
     def __init__(self):
         self.recognizer = sr.Recognizer()
         self.recognizer.energy_threshold = 300
@@ -67,13 +85,14 @@ class VoiceEngine:
         if action == "open_app":
             app = params.get("app_name", "").lower()
             if "youtube" in app:
-                import webbrowser
-                webbrowser.open("https://youtube.com")
+                subprocess.Popen(['cmd', '/c', 'start', 'https://www.youtube.com'])
                 self.speak("Opening YouTube")
             elif "linkedin" in app:
-                import webbrowser
-                webbrowser.open("https://linkedin.com")
+                subprocess.Popen(['cmd', '/c', 'start', 'https://www.linkedin.com'])
                 self.speak("Opening LinkedIn")
+            elif "google" in app:
+                subprocess.Popen(['cmd', '/c', 'start', 'https://www.google.com'])
+                self.speak("Opening Google")
             elif "vs code" in app or "vscode" in app or "code" in app:
                 subprocess.Popen(
                     'C:/Users/uniya/AppData/Local/Programs/Microsoft VS Code/Code.exe'
@@ -83,11 +102,14 @@ class VoiceEngine:
                 subprocess.Popen('notepad.exe')
                 self.speak("Opening Notepad")
             elif "chrome" in app:
-                subprocess.Popen('chrome.exe')
+                subprocess.Popen(['cmd', '/c', 'start', 'chrome'])
                 self.speak("Opening Chrome")
+            elif "spotify" in app:
+                subprocess.Popen(['cmd', '/c', 'start', 'spotify'])
+                self.speak("Opening Spotify")
             else:
+                subprocess.Popen(['cmd', '/c', 'start', app])
                 self.speak(f"Opening {app}")
-                subprocess.Popen(f'{app}.exe', shell=True)
 
         elif action == "volume_up":
             for _ in range(10):
@@ -105,11 +127,9 @@ class VoiceEngine:
 
         elif action == "scroll_up":
             pyautogui.scroll(5)
-            self.speak("Scrolling up")
 
         elif action == "scroll_down":
             pyautogui.scroll(-5)
-            self.speak("Scrolling down")
 
         elif action == "close_window":
             pyautogui.hotkey('alt', 'f4')
@@ -121,26 +141,33 @@ class VoiceEngine:
 
         elif action == "new_tab":
             pyautogui.hotkey('ctrl', 't')
-            self.speak("New tab")
 
         elif action == "close_tab":
             pyautogui.hotkey('ctrl', 'w')
-            self.speak("Tab closed")
 
         elif action == "search":
             query = params.get("query", "")
-            import webbrowser
-            webbrowser.open(f"https://google.com/search?q={query}")
+            subprocess.Popen([
+                'cmd', '/c', 'start',
+                f'https://google.com/search?q={query}'
+            ])
             self.speak(f"Searching for {query}")
 
         elif action == "unknown":
             self.speak("Sorry, I didn't understand that")
 
     def process_command(self, command):
+        # Layer 1 — check fast commands first
+        for key in self.FAST_COMMANDS:
+            if key in command:
+                print(f"Fast executing: {key} ⚡")
+                self.FAST_COMMANDS[key]()
+                return
+
+        # Layer 2 — unknown command, use AI
         print(f"Thinking... 🧠")
         response = self.brain.think(command)
         try:
-            # Clean response and parse JSON
             response = response.strip()
             if "```" in response:
                 response = response.split("```")[1]
