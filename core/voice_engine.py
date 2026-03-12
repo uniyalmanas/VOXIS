@@ -6,27 +6,80 @@ import time
 import json
 import sys
 import os
+import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from ai_brain import AIBrain
+from screen_vision import ScreenVision
 
 class VoiceEngine:
-    # Layer 1 — Fast commands, bypass AI completely
     FAST_COMMANDS = {
-        "volume up":    lambda: [pyautogui.press('volumeup') for _ in range(10)],
-        "volume down":  lambda: [pyautogui.press('volumedown') for _ in range(10)],
-        "mute":         lambda: pyautogui.press('volumemute'),
-        "screenshot":   lambda: pyautogui.hotkey('win', 'shift', 's'),
-        "scroll up":    lambda: pyautogui.scroll(5),
-        "scroll down":  lambda: pyautogui.scroll(-5),
-        "close":        lambda: pyautogui.hotkey('alt', 'f4'),
-        "new tab":      lambda: pyautogui.hotkey('ctrl', 't'),
-        "close tab":    lambda: pyautogui.hotkey('ctrl', 'w'),
-        "go back":      lambda: pyautogui.hotkey('alt', 'left'),
-        "copy":         lambda: pyautogui.hotkey('ctrl', 'c'),
-        "paste":        lambda: pyautogui.hotkey('ctrl', 'v'),
-        "select all":   lambda: pyautogui.hotkey('ctrl', 'a'),
-        "undo":         lambda: pyautogui.hotkey('ctrl', 'z'),
+        "volume up":            lambda self: [pyautogui.press('volumeup') for _ in range(10)],
+        "volume down":          lambda self: [pyautogui.press('volumedown') for _ in range(10)],
+        "mute":                 lambda self: pyautogui.press('volumemute'),
+        "unmute":               lambda self: pyautogui.press('volumemute'),
+        "screenshot":           lambda self: self._take_screenshot(),
+        "take screenshot":      lambda self: self._take_screenshot(),
+        "capture screen":       lambda self: self._take_screenshot(),
+        "take a photo":         lambda self: subprocess.Popen(['cmd', '/c', 'start', 'microsoft.windows.camera:']),
+        "take photo":           lambda self: subprocess.Popen(['cmd', '/c', 'start', 'microsoft.windows.camera:']),
+        "click a photo":        lambda self: subprocess.Popen(['cmd', '/c', 'start', 'microsoft.windows.camera:']),
+        "scroll up":            lambda self: pyautogui.scroll(5),
+        "scroll down":          lambda self: pyautogui.scroll(-5),
+        "page up":              lambda self: pyautogui.press('pageup'),
+        "page down":            lambda self: pyautogui.press('pagedown'),
+        "go to top":            lambda self: pyautogui.hotkey('ctrl', 'home'),
+        "go to bottom":         lambda self: pyautogui.hotkey('ctrl', 'end'),
+        "close":                lambda self: pyautogui.hotkey('alt', 'f4'),
+        "close window":         lambda self: pyautogui.hotkey('alt', 'f4'),
+        "minimize":             lambda self: pyautogui.hotkey('win', 'down'),
+        "maximize":             lambda self: pyautogui.hotkey('win', 'up'),
+        "new tab":              lambda self: pyautogui.hotkey('ctrl', 't'),
+        "close tab":            lambda self: pyautogui.hotkey('ctrl', 'w'),
+        "next tab":             lambda self: pyautogui.hotkey('ctrl', 'tab'),
+        "previous tab":         lambda self: pyautogui.hotkey('ctrl', 'shift', 'tab'),
+        "reopen tab":           lambda self: pyautogui.hotkey('ctrl', 'shift', 't'),
+        "refresh":              lambda self: pyautogui.hotkey('ctrl', 'r'),
+        "reload":               lambda self: pyautogui.hotkey('ctrl', 'r'),
+        "go back":              lambda self: pyautogui.hotkey('alt', 'left'),
+        "go forward":           lambda self: pyautogui.hotkey('alt', 'right'),
+        "copy":                 lambda self: pyautogui.hotkey('ctrl', 'c'),
+        "paste":                lambda self: pyautogui.hotkey('ctrl', 'v'),
+        "cut":                  lambda self: pyautogui.hotkey('ctrl', 'x'),
+        "select all":           lambda self: pyautogui.hotkey('ctrl', 'a'),
+        "undo":                 lambda self: pyautogui.hotkey('ctrl', 'z'),
+        "redo":                 lambda self: pyautogui.hotkey('ctrl', 'y'),
+        "save":                 lambda self: pyautogui.hotkey('ctrl', 's'),
+        "find":                 lambda self: pyautogui.hotkey('ctrl', 'f'),
+        "zoom in":              lambda self: pyautogui.hotkey('ctrl', '+'),
+        "zoom out":             lambda self: pyautogui.hotkey('ctrl', '-'),
+        "open youtube":         lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.youtube.com']),
+        "open linkedin":        lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.linkedin.com']),
+        "open gmail":           lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://mail.google.com']),
+        "open google":          lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.google.com']),
+        "open github":          lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.github.com']),
+        "open twitter":         lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.twitter.com']),
+        "open whatsapp":        lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://web.whatsapp.com']),
+        "open instagram":       lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.instagram.com']),
+        "open netflix":         lambda self: subprocess.Popen(['cmd', '/c', 'start', 'https://www.netflix.com']),
+        "open spotify":         lambda self: subprocess.Popen(['cmd', '/c', 'start', 'spotify:']),
+        "open notepad":         lambda self: subprocess.Popen('notepad.exe'),
+        "open calculator":      lambda self: subprocess.Popen('calc.exe'),
+        "open camera":          lambda self: subprocess.Popen(['cmd', '/c', 'start', 'microsoft.windows.camera:']),
+        "open settings":        lambda self: subprocess.Popen(['cmd', '/c', 'start', 'ms-settings:']),
+        "open vs code":         lambda self: subprocess.Popen('C:/Users/uniya/AppData/Local/Programs/Microsoft VS Code/Code.exe'),
+        "open code":            lambda self: subprocess.Popen('C:/Users/uniya/AppData/Local/Programs/Microsoft VS Code/Code.exe'),
+        "open file explorer":   lambda self: subprocess.Popen('explorer.exe'),
+        "open task manager":    lambda self: subprocess.Popen('taskmgr.exe'),
+        "lock screen":          lambda self: pyautogui.hotkey('win', 'l'),
+        "show desktop":         lambda self: pyautogui.hotkey('win', 'd'),
+        "task view":            lambda self: pyautogui.hotkey('win', 'tab'),
+        "switch app":           lambda self: pyautogui.hotkey('alt', 'tab'),
+        "switch window":        lambda self: pyautogui.hotkey('alt', 'tab'),
+        "what's on my screen":  lambda self: self.speak(self._get_vision().summarize_screen()),
+        "read my screen":       lambda self: self.speak(self._get_vision().summarize_screen()),
+        "what do you see":      lambda self: self.speak(self._get_vision().summarize_screen()),
+        "summarize screen":     lambda self: self.speak(self._get_vision().summarize_screen()),
     }
 
     def __init__(self):
@@ -35,21 +88,29 @@ class VoiceEngine:
         self.recognizer.dynamic_energy_threshold = False
         self.recognizer.pause_threshold = 0.5
         self.microphone = sr.Microphone()
-
-        # Calibrate microphone once at startup
         with self.microphone as source:
             self.recognizer.adjust_for_ambient_noise(source, duration=1)
         print("Microphone calibrated ✅")
-
         self.speaker = pyttsx3.init()
         self.speaker.setProperty('rate', 175)
         self.speaker.setProperty('volume', 1.0)
         self.wake_word = "jarvis"
-
-        # Initialize AI Brain
         self.brain = AIBrain()
-
+        self.vision = None
         print("VOXIS Voice Engine - Initialized")
+
+    def _take_screenshot(self):
+        filename = f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        path = os.path.join(os.path.expanduser("~"), "Pictures", filename)
+        pyautogui.screenshot(path)
+        self.speak("Screenshot saved")
+        print(f"Saved to: {path}")
+
+    def _get_vision(self):
+        if self.vision is None:
+            print("Loading screen vision... 👁️")
+            self.vision = ScreenVision()
+        return self.vision
 
     def speak(self, text):
         print(f"VOXIS: {text}")
@@ -90,6 +151,9 @@ class VoiceEngine:
             elif "linkedin" in app:
                 subprocess.Popen(['cmd', '/c', 'start', 'https://www.linkedin.com'])
                 self.speak("Opening LinkedIn")
+            elif "gmail" in app or "mail" in app:
+                subprocess.Popen(['cmd', '/c', 'start', 'https://mail.google.com'])
+                self.speak("Opening Gmail")
             elif "google" in app:
                 subprocess.Popen(['cmd', '/c', 'start', 'https://www.google.com'])
                 self.speak("Opening Google")
@@ -105,8 +169,17 @@ class VoiceEngine:
                 subprocess.Popen(['cmd', '/c', 'start', 'chrome'])
                 self.speak("Opening Chrome")
             elif "spotify" in app:
-                subprocess.Popen(['cmd', '/c', 'start', 'spotify'])
+                subprocess.Popen(['cmd', '/c', 'start', 'spotify:'])
                 self.speak("Opening Spotify")
+            elif "camera" in app:
+                subprocess.Popen(['cmd', '/c', 'start', 'microsoft.windows.camera:'])
+                self.speak("Opening camera")
+            elif "calculator" in app:
+                subprocess.Popen('calc.exe')
+                self.speak("Opening calculator")
+            elif "settings" in app:
+                subprocess.Popen(['cmd', '/c', 'start', 'ms-settings:'])
+                self.speak("Opening settings")
             else:
                 subprocess.Popen(['cmd', '/c', 'start', app])
                 self.speak(f"Opening {app}")
@@ -136,8 +209,7 @@ class VoiceEngine:
             self.speak("Closing window")
 
         elif action == "take_screenshot":
-            pyautogui.hotkey('win', 'shift', 's')
-            self.speak("Screenshot taken")
+            self._take_screenshot()
 
         elif action == "new_tab":
             pyautogui.hotkey('ctrl', 't')
@@ -157,14 +229,11 @@ class VoiceEngine:
             self.speak("Sorry, I didn't understand that")
 
     def process_command(self, command):
-        # Layer 1 — check fast commands first
         for key in self.FAST_COMMANDS:
             if key in command:
                 print(f"Fast executing: {key} ⚡")
-                self.FAST_COMMANDS[key]()
+                self.FAST_COMMANDS[key](self)
                 return
-
-        # Layer 2 — unknown command, use AI
         print(f"Thinking... 🧠")
         response = self.brain.think(command)
         try:
@@ -185,14 +254,11 @@ class VoiceEngine:
     def run(self):
         self.speak("VOXIS is ready")
         print("Say 'Jarvis' to activate")
-
         while True:
             print("Listening...")
             audio = self.listen()
-
             if audio:
                 print(f"Heard: '{audio}'")
-
             if self.wake_word in audio:
                 self.speak("Yes?")
                 print("Listening for command...")
@@ -200,7 +266,6 @@ class VoiceEngine:
                 if command:
                     print(f"Command: {command}")
                     self.process_command(command)
-
             time.sleep(0.1)
 
 if __name__ == "__main__":
