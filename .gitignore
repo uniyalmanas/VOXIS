@@ -18,3 +18,5 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.dbconfig/settings.py
+config/settings.py
+config/settings.py
