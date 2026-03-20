@@ -7,6 +7,7 @@ import json
 import sys
 import os
 import datetime
+import re
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from ai_brain import AIBrain
@@ -122,8 +123,8 @@ class VoiceEngine:
             with self.microphone as source:
                 audio = self.recognizer.listen(
                     source,
-                    timeout=3,
-                    phrase_time_limit=3
+                    timeout=5,
+                    phrase_time_limit=5
                 )
             text = self.recognizer.recognize_google(
                 audio,
@@ -218,38 +219,70 @@ class VoiceEngine:
             pyautogui.hotkey('ctrl', 'w')
 
         elif action == "search":
-            query = params.get("query", "")
-            subprocess.Popen([
-                'cmd', '/c', 'start',
-                f'https://google.com/search?q={query}'
-            ])
-            self.speak(f"Searching for {query}")
-
-        elif action == "unknown":
-            self.speak("Sorry, I didn't understand that")
+             query = params.get("query", "")
+             platform = params.get("platform", "google")
+             
+             # URL encode the query
+             import urllib.parse
+             query_encoded = urllib.parse.quote(query)
+             
+             if "youtube" in platform or "youtube" in query:
+                 query_clean = query.replace("youtube", "").strip()
+                 query_encoded = urllib.parse.quote(query_clean)
+                 url = f'https://www.youtube.com/results?search_query={query_encoded}'
+             else:
+                 url = f'https://www.google.com/search?q={query_encoded}'
+             
+             subprocess.Popen(['cmd', '/c', 'start', '', url])
+             self.speak(f"Searching for {query}")
+         
+        
 
     def process_command(self, command):
+        # Layer 1 — fast commands
         for key in self.FAST_COMMANDS:
             if key in command:
                 print(f"Fast executing: {key} ⚡")
                 self.FAST_COMMANDS[key](self)
                 return
+
+        # Layer 2 — AI brain
         print(f"Thinking... 🧠")
         response = self.brain.think(command)
+
         try:
-            response = response.strip()
-            if "```" in response:
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-            data = json.loads(response)
-            action = data.get("action", "unknown")
-            params = data.get("params", {})
-            print(f"Action: {action} | Params: {params}")
-            self.execute_action(action, params)
+            response_clean = response.strip()
+
+            # Remove mode labels if LLM adds them
+            if "MODE 1" in response_clean or "MODE 2" in response_clean:
+                json_match = re.search(r'\{.*\}', response_clean, re.DOTALL)
+                if json_match:
+                    response_clean = json_match.group()
+                else:
+                    self.speak(response_clean)
+                    return
+
+            # Remove markdown code blocks
+            if "```" in response_clean:
+                response_clean = response_clean.split("```")[1]
+                if response_clean.startswith("json"):
+                    response_clean = response_clean[4:]
+
+            # Try JSON first
+            if response_clean.startswith('{'):
+                data = json.loads(response_clean)
+                action = data.get("action", "unknown")
+                params = data.get("params", {})
+                print(f"Action: {action} | Params: {params}")
+                self.execute_action(action, params)
+            else:
+                # Chat response
+                print(f"VOXIS says: {response_clean}")
+                self.speak(response_clean)
+
         except json.JSONDecodeError:
-            print(f"Could not parse: {response}")
-            self.speak("Sorry, something went wrong")
+            print(f"VOXIS says: {response}")
+            self.speak(response)
 
     def run(self):
         self.speak("VOXIS is ready")
