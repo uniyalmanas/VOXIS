@@ -128,8 +128,8 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
         try:
             full_prompt = f"{self.system_prompt}\n\nUser: {command}"
             response = self.gemini_client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=full_prompt
+            model="gemini-2.0-flash",
+            contents=full_prompt
             )
             return response.text.strip()
         except Exception as e:
