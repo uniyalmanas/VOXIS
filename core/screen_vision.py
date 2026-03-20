@@ -47,4 +47,4 @@ class ScreenVision:
 if __name__ == "__main__":
     vision = ScreenVision()
     print("Testing screen vision...")
-    print(vision.summarize_screen())
+    print(vision.summarize_screen()) 
