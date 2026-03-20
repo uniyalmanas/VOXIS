@@ -15,7 +15,6 @@ spec.loader.exec_module(settings)
 
 class AIBrain:
     def __init__(self):
-        # Initialize all three clients
         self.groq_client = Groq(api_key=settings.GROQ_API_KEY)
         self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.local_model = settings.LOCAL_MODEL
@@ -64,12 +63,16 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             "don't send", "local only"
         ]
 
-        # Hindi keywords → Gemini (better Hindi)
+        # Hindi keywords → must be clearly Hindi
+        # Removed short words like "do", "de", "lo", "le"
+        # that match common English words
         hindi_keywords = [
-            "karo", "kro", "khol", "band",
-            "chalao", "likho", "batao", "hai",
+            "karo", "kro", "khol", "band karo",
+            "chalao", "likho", "batao",
             "mera", "meri", "yaar", "bhai",
-            "do", "de", "lo", "le"
+            "aur", "nahi", "haan", "theek",
+            "youtube khol", "google khol",
+            "awaaz", "volume badha", "volume ghata"
         ]
 
         # Complex keywords → Gemini
@@ -84,21 +87,21 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
 
         # Private → local LLaMA 3
         if any(word in command_lower for word in private_keywords):
-            print("🔒 Private mode → Local LLaMA 3")
+            print("🔒 Private → Local LLaMA 3")
             return "private"
 
         # Hindi → Gemini
         if any(word in command_lower for word in hindi_keywords):
-            print("🇮🇳 Hindi detected → Gemini")
+            print("🇮🇳 Hindi → Gemini")
             return "gemini"
 
         # Complex → Gemini
         if any(word in command_lower for word in complex_keywords):
-            print("🧠 Complex task → Gemini")
+            print("🧠 Complex → Gemini")
             return "gemini"
 
         # Default → Groq (fastest)
-        print("⚡ Simple task → Groq")
+        print("⚡ Groq")
         return "groq"
 
     def _think_groq(self, command):
@@ -117,10 +120,8 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"Groq error: {e}")
+            print(f"⚠️ Groq unavailable → Local")
             return self._think_local(command)
-        
-
 
     def _think_gemini(self, command):
         """Smart responses via Gemini — better Hindi"""
@@ -132,7 +133,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             )
             return response.text.strip()
         except Exception as e:
-            print(f"Gemini error: {e}")
+            print(f"⚠️ Gemini unavailable → Groq")
             return self._think_groq(command)
 
     def _think_local(self, command):
@@ -149,7 +150,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             )
             return response['message']['content'].strip()
         except Exception as e:
-            print(f"Local error: {e}")
+            print(f"⚠️ Local unavailable")
             return '{"action": "unknown", "params": {}}'
 
     def think(self, command):
@@ -164,7 +165,6 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             else:
                 reply = self._think_local(command)
 
-            # Save to history
             self.conversation_history.append({
                 "role": "user",
                 "content": command
@@ -177,7 +177,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             return reply
 
         except Exception as e:
-            print(f"AI Brain Error: {e}")
+            print(f"⚠️ AI Brain Error")
             return '{"action": "unknown", "params": {}}'
 
     def set_mode(self, mode):
@@ -185,7 +185,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
         valid_modes = ["auto", "speed", "private", "gemini"]
         if mode in valid_modes:
             self.mode = mode
-            print(f"Mode switched to: {mode.upper()} ✅")
+            print(f"Mode: {mode.upper()} ✅")
             return f"Switched to {mode} mode"
         return "Invalid mode"
 
@@ -195,6 +195,7 @@ if __name__ == "__main__":
         "open youtube",
         "how are you",
         "YouTube khol do",
+        "what can you do for me",
         "play lofi music on youtube",
         "search latest AI news",
         "tell me a joke",
