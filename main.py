@@ -19,7 +19,7 @@ os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'core'))
 
 from gesture_engine import GestureEngine
-from voice_engine import VoiceEngine
+from voice_runtime import VoiceEngine
 
 class VOXIS:
     def __init__(self):
@@ -29,7 +29,7 @@ class VOXIS:
         ██║   ██║██║   ██║ ╚███╔╝ ██║███████╗
         ╚██╗ ██╔╝██║   ██║ ██╔██╗ ██║╚════██║
          ╚████╔╝ ╚██████╔╝██╔╝ ██╗██║███████║
-          ╚═══╝   ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝
+          ╚═══╝   ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝ 
         Voice & Gesture OS Control — STARTING
         """)
         self.voice_ready = threading.Event()

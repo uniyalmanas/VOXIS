@@ -104,14 +104,34 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
         print("⚡ Groq")
         return "groq"
 
-    def _think_groq(self, command):
+    def _build_messages(self, command, context=None, history=None):
+        messages = [{"role": "system", "content": self.system_prompt}]
+
+        if context:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "Current desktop context:\n"
+                    f"- active_app: {context.get('active_app', '')}\n"
+                    f"- last_command: {context.get('last_command', '')}\n"
+                    f"- last_intent: {context.get('last_intent', '')}\n"
+                    f"- last_action: {context.get('last_action', '')}\n"
+                    f"- last_result: {context.get('last_result', '')}"
+                ),
+            })
+
+        if history:
+            messages.extend(history[-6:])
+        else:
+            messages.extend(list(self.conversation_history))
+
+        messages.append({"role": "user", "content": command})
+        return messages
+
+    def _think_groq(self, command, context=None, history=None):
         """Fast responses via Groq"""
         try:
-            messages = [
-                {"role": "system", "content": self.system_prompt}
-            ] + list(self.conversation_history) + [
-                {"role": "user", "content": command}
-            ]
+            messages = self._build_messages(command, context=context, history=history)
             response = self.groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=messages,
@@ -121,7 +141,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"⚠️ Groq unavailable → Local")
-            return self._think_local(command)
+            return self._think_local(command, context=context, history=history)
 
     def _think_gemini(self, command):
         """Smart responses via Gemini — better Hindi"""
