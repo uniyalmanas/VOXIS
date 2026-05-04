@@ -5,17 +5,26 @@ import platform
 import subprocess
 import urllib.parse
 import ctypes
+import logging
 
 import pyautogui
 
 from state import Action
 
 
+logger = logging.getLogger("VOXIS.ActionRegistry")
+
+
 def _open_target(target: str) -> None:
-    subprocess.Popen(["cmd", "/c", "start", "", target])
+    """Safely open a target (URL, app path, etc.)"""
+    try:
+        subprocess.Popen(["cmd", "/c", "start", "", target])
+    except Exception as e:
+        logger.error(f"Failed to open target {target}: {e}")
 
 
 def _safe_eval_expression(expression: str) -> float:
+    """Safely evaluate mathematical expressions"""
     allowed = set("0123456789+-*/(). ")
     if any(ch not in allowed for ch in expression):
         raise ValueError("Unsupported math expression")
@@ -28,6 +37,7 @@ class ActionRegistry:
         self.voice_engine = voice_engine
         self.handlers = {
             "open_app": self.open_app,
+            "compose_email": self.compose_email,
             "search_web": self.search_web,
             "calculate": self.calculate,
             "system_info": self.system_info,
@@ -37,15 +47,64 @@ class ActionRegistry:
             "take_screenshot": self.take_screenshot,
             "scroll": self.scroll,
             "hotkey": self.hotkey,
+            "press_key": self.press_key,
+            "type_text": self.type_text,
             "read_screen": self.read_screen,
             "switch_language": self.switch_language,
             "respond": self.respond,
             "unknown": self.unknown,
         }
 
+    def _validate_params(self, action_name: str, params: dict) -> dict:
+        """
+        Validate and sanitize params before execution.
+        Returns cleaned params or raises ValueError.
+        """
+        if not isinstance(params, dict):
+            logger.warning(f"Non-dict params for {action_name}: {type(params)}")
+            return {}
+        
+        # Remove any unexpected keys or sanitize based on action type
+        if action_name in ["hotkey", "press_key"]:
+            # Validate keyboard keys
+            if "keys" in params and not isinstance(params["keys"], list):
+                logger.warning(f"Invalid keys format in {action_name}")
+                params["keys"] = []
+            if "key" in params and not isinstance(params["key"], str):
+                logger.warning(f"Invalid key format in {action_name}")
+                del params["key"]
+        
+        if action_name == "type_text":
+            if "text" in params and not isinstance(params["text"], str):
+                logger.warning(f"Invalid text format in {action_name}")
+                params["text"] = str(params["text"])
+        
+        return params
+
     def execute(self, action: Action) -> dict:
-        handler = self.handlers.get(action.name, self.unknown)
-        return handler(action.params)
+        """
+        Execute an action with error handling and validation.
+        """
+        try:
+            if not action or not action.name:
+                logger.warning("Empty or invalid action")
+                return {"success": False, "text": "Invalid action"}
+            
+            # Validate params before passing to handler
+            params = self._validate_params(action.name, action.params or {})
+            
+            handler = self.handlers.get(action.name, self.unknown)
+            result = handler(params)
+            
+            # Ensure result is dict
+            if not isinstance(result, dict):
+                result = {"success": False, "text": "Invalid handler result"}
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error executing action {action.name}: {e}", exc_info=True)
+            return {"success": False, "text": f"Error: {str(e)}"}
 
     def open_app(self, params: dict) -> dict:
         app = params.get("app_name", "").lower().strip()
@@ -106,6 +165,27 @@ class ActionRegistry:
 
         _open_target(url)
         return {"speak_text": f"Searching for {query}"}
+
+    def compose_email(self, params: dict) -> dict:
+        recipient = params.get("to", "").strip()
+        subject = params.get("subject", "Draft from VOXIS").strip()
+        body = params.get("body", "").strip()
+
+        if not recipient:
+            return {"speak_text": "I need an email address for that draft."}
+
+        query = urllib.parse.urlencode({
+            "view": "cm",
+            "fs": "1",
+            "to": recipient,
+            "su": subject,
+            "body": body,
+        })
+        _open_target(f"https://mail.google.com/mail/?{query}")
+        return {
+            "speak_text": "I opened a Gmail draft. Please review it before sending.",
+            "text": f"Gmail draft opened for {recipient}",
+        }
 
     def calculate(self, params: dict) -> dict:
         expression = params.get("expression", "").strip()
@@ -199,6 +279,19 @@ class ActionRegistry:
         keys = params.get("keys", [])
         if isinstance(keys, list) and keys:
             pyautogui.hotkey(*keys)
+        return {"speak_text": params.get("confirmation", "")}
+
+    def press_key(self, params: dict) -> dict:
+        key = params.get("key", "").strip().lower()
+        presses = int(params.get("presses", 1))
+        if key:
+            pyautogui.press(key, presses=max(1, presses))
+        return {"speak_text": params.get("confirmation", "")}
+
+    def type_text(self, params: dict) -> dict:
+        text = params.get("text", "")
+        if text:
+            pyautogui.write(text, interval=0)
         return {"speak_text": params.get("confirmation", "")}
 
     def read_screen(self, params: dict) -> dict:

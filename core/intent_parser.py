@@ -1,160 +1,82 @@
 import re
+import logging
 
+from command_registry import CommandRegistry
 from model_router import ModelRouter
 from state import Intent, RuntimeState
+
+
+logger = logging.getLogger("VOXIS.IntentParser")
 
 
 class IntentParser:
     def __init__(self, state: RuntimeState):
         self.state = state
         self.model_router = ModelRouter()
-        self.quick_replies = {
-            "hello": "Hello. How can I help?",
-            "hi": "Hi. What would you like me to do?",
-            "hey": "Yes?",
-            "how are you": "I'm ready and working with you.",
-            "who are you": "I'm VOXIS, your desktop copilot.",
-            "thank you": "You're welcome.",
-            "thanks": "You're welcome.",
-            "good morning": "Good morning. I'm ready.",
-            "good night": "Good night.",
-            "namaste": "Namaste. Main ready hoon.",
-            "kaise ho": "Main theek hoon. Bataiye, kya karna hai?",
-            "tum kaun ho": "Main VOXIS hoon, aapka desktop copilot.",
-            "shukriya": "Aapka swagat hai.",
-        }
-
-        self.direct_commands = {
-            "mute": Intent(name="mute", confidence=1.0),
-            "unmute": Intent(name="mute", confidence=1.0),
-            "screenshot": Intent(name="take_screenshot", confidence=1.0),
-            "take screenshot": Intent(name="take_screenshot", confidence=1.0),
-            "capture screen": Intent(name="take_screenshot", confidence=1.0),
-            "scroll up": Intent(name="scroll", params={"amount": 5}, confidence=1.0),
-            "scroll down": Intent(name="scroll", params={"amount": -5}, confidence=1.0),
-            "page up": Intent(name="hotkey", params={"keys": ["pageup"]}, confidence=1.0),
-            "page down": Intent(name="hotkey", params={"keys": ["pagedown"]}, confidence=1.0),
-            "go to top": Intent(name="hotkey", params={"keys": ["ctrl", "home"]}, confidence=1.0),
-            "go to bottom": Intent(name="hotkey", params={"keys": ["ctrl", "end"]}, confidence=1.0),
-            "close": Intent(name="hotkey", params={"keys": ["alt", "f4"], "confirmation": "Closing window"}, confidence=1.0),
-            "close window": Intent(name="hotkey", params={"keys": ["alt", "f4"], "confirmation": "Closing window"}, confidence=1.0),
-            "minimize": Intent(name="hotkey", params={"keys": ["win", "down"]}, confidence=1.0),
-            "maximize": Intent(name="hotkey", params={"keys": ["win", "up"]}, confidence=1.0),
-            "show desktop": Intent(name="hotkey", params={"keys": ["win", "d"]}, confidence=1.0),
-            "task view": Intent(name="hotkey", params={"keys": ["win", "tab"]}, confidence=1.0),
-            "switch app": Intent(name="hotkey", params={"keys": ["alt", "tab"]}, confidence=1.0),
-            "switch window": Intent(name="hotkey", params={"keys": ["alt", "tab"]}, confidence=1.0),
-            "lock screen": Intent(name="hotkey", params={"keys": ["win", "l"]}, confidence=1.0),
-            "new tab": Intent(name="hotkey", params={"keys": ["ctrl", "t"]}, confidence=1.0),
-            "close tab": Intent(name="hotkey", params={"keys": ["ctrl", "w"]}, confidence=1.0),
-            "next tab": Intent(name="hotkey", params={"keys": ["ctrl", "tab"]}, confidence=1.0),
-            "previous tab": Intent(name="hotkey", params={"keys": ["ctrl", "shift", "tab"]}, confidence=1.0),
-            "reopen tab": Intent(name="hotkey", params={"keys": ["ctrl", "shift", "t"]}, confidence=1.0),
-            "refresh": Intent(name="hotkey", params={"keys": ["ctrl", "r"]}, confidence=1.0),
-            "reload": Intent(name="hotkey", params={"keys": ["ctrl", "r"]}, confidence=1.0),
-            "go back": Intent(name="hotkey", params={"keys": ["alt", "left"]}, confidence=1.0),
-            "go forward": Intent(name="hotkey", params={"keys": ["alt", "right"]}, confidence=1.0),
-            "copy": Intent(name="hotkey", params={"keys": ["ctrl", "c"]}, confidence=1.0),
-            "paste": Intent(name="hotkey", params={"keys": ["ctrl", "v"]}, confidence=1.0),
-            "cut": Intent(name="hotkey", params={"keys": ["ctrl", "x"]}, confidence=1.0),
-            "select all": Intent(name="hotkey", params={"keys": ["ctrl", "a"]}, confidence=1.0),
-            "undo": Intent(name="hotkey", params={"keys": ["ctrl", "z"]}, confidence=1.0),
-            "redo": Intent(name="hotkey", params={"keys": ["ctrl", "y"]}, confidence=1.0),
-            "save": Intent(name="hotkey", params={"keys": ["ctrl", "s"]}, confidence=1.0),
-            "find": Intent(name="hotkey", params={"keys": ["ctrl", "f"]}, confidence=1.0),
-            "zoom in": Intent(name="hotkey", params={"keys": ["ctrl", "+"]}, confidence=1.0),
-            "zoom out": Intent(name="hotkey", params={"keys": ["ctrl", "-"]}, confidence=1.0),
-            "what's on my screen": Intent(name="read_screen", confidence=1.0),
-            "read my screen": Intent(name="read_screen", confidence=1.0),
-            "what do you see": Intent(name="read_screen", confidence=1.0),
-            "summarize screen": Intent(name="read_screen", confidence=1.0),
-            "system information": Intent(name="system_info", confidence=1.0),
-            "my system information": Intent(name="system_info", confidence=1.0),
-            "my laptop information": Intent(name="system_info", confidence=1.0),
-            "about my laptop": Intent(name="system_info", confidence=1.0),
-            "about my system": Intent(name="system_info", confidence=1.0),
-            "what am i using": Intent(name="system_info", confidence=1.0),
-            "switch to local": Intent(name="switch_model", params={"mode": "private"}, confidence=1.0),
-            "use local ai": Intent(name="switch_model", params={"mode": "private"}, confidence=1.0),
-            "use llama": Intent(name="switch_model", params={"mode": "private"}, confidence=1.0),
-            "switch to gemini": Intent(name="switch_model", params={"mode": "gemini"}, confidence=1.0),
-            "use gemini": Intent(name="switch_model", params={"mode": "gemini"}, confidence=1.0),
-            "switch to groq": Intent(name="switch_model", params={"mode": "groq"}, confidence=1.0),
-            "switch to grock": Intent(name="switch_model", params={"mode": "groq"}, confidence=1.0),
-            "use groq": Intent(name="switch_model", params={"mode": "groq"}, confidence=1.0),
-            "use grock": Intent(name="switch_model", params={"mode": "groq"}, confidence=1.0),
-            "switch to auto": Intent(name="switch_model", params={"mode": "auto"}, confidence=1.0),
-            "auto mode": Intent(name="switch_model", params={"mode": "auto"}, confidence=1.0),
-            "switch to hindi": Intent(name="switch_language", params={"primary": "hi-IN", "fallback": "en-IN", "name": "Hindi"}, confidence=1.0),
-            "switch to english": Intent(name="switch_language", params={"primary": "en-IN", "fallback": "en-US", "name": "English"}, confidence=1.0),
-            "hindi mode": Intent(name="switch_language", params={"primary": "hi-IN", "fallback": "en-IN", "name": "Hindi"}, confidence=1.0),
-            "english mode": Intent(name="switch_language", params={"primary": "en-IN", "fallback": "en-US", "name": "English"}, confidence=1.0),
-            "volume up": Intent(name="set_volume", params={"direction": "up", "steps": 10}, confidence=1.0),
-            "volume down": Intent(name="set_volume", params={"direction": "down", "steps": 10}, confidence=1.0),
-            "volume badha": Intent(name="set_volume", params={"direction": "up", "steps": 10}, confidence=1.0),
-            "volume kam karo": Intent(name="set_volume", params={"direction": "down", "steps": 10}, confidence=1.0),
-            "awaaz badha": Intent(name="set_volume", params={"direction": "up", "steps": 10}, confidence=1.0),
-            "awaaz kam karo": Intent(name="set_volume", params={"direction": "down", "steps": 10}, confidence=1.0),
-        }
-        self.known_apps = {
-            "youtube", "linkedin", "gmail", "google", "github", "twitter",
-            "whatsapp", "instagram", "netflix", "spotify", "notepad",
-            "calculator", "calc", "camera", "settings", "vs code", "code",
-            "file explorer", "task manager",
-        }
-        self.app_aliases = {
-            "कैमरा": "camera",
-            "camera": "camera",
-            "कैलकुलेटर": "calculator",
-            "calculator": "calculator",
-            "calc": "calculator",
-            "नोटपैड": "notepad",
-            "notepad": "notepad",
-            "सेटिंग्स": "settings",
-            "settings": "settings",
-            "यूट्यूब": "youtube",
-            "youtube": "youtube",
-            "गूगल": "google",
-            "google": "google",
-            "जीमेल": "gmail",
-            "gmail": "gmail",
-            "व्हाट्सएप": "whatsapp",
-            "whatsapp": "whatsapp",
-            "इंस्टाग्राम": "instagram",
-            "instagram": "instagram",
-            "स्पॉटिफाई": "spotify",
-            "spotify": "spotify",
-            "फाइल एक्सप्लोरर": "file explorer",
-            "explorer": "file explorer",
-            "टास्क मैनेजर": "task manager",
-            "कोड": "code",
-            "वीएस कोड": "vs code",
-        }
-
+        self.command_registry = CommandRegistry()
+    
     def parse(self, command: str) -> Intent:
+        """
+        Parse a command into an intent using multiple strategies:
+        1. Quick replies (instant responses)
+        2. Direct commands (from registry)
+        3. Special pattern matching (type, open, search, email, etc.)
+        4. Model inference (AI-powered fallback)
+        """
+        if not command or not command.strip():
+            logger.warning("Empty command")
+            return Intent(name="unknown", confidence=0.0)
+        
         text = command.strip().lower()
 
-        quick_reply = self._quick_reply(text)
+        type_match = re.search(r"^(type|dictate|insert|write this)\s+(.+)$", text)
+        if type_match:
+            return Intent(
+                name="type_text",
+                params={"text": type_match.group(2)},
+                confidence=0.98,
+                raw_text=command,
+                source="rule",
+            )
+        
+        # Try quick reply
+        quick_reply = self.command_registry.get_quick_reply(text)
         if quick_reply:
+            logger.debug(f"Quick reply matched: {text}")
             return Intent(
                 name="respond",
                 params={"text": quick_reply},
                 confidence=1.0,
                 raw_text=command,
-                source="rule",
+                source="quick_reply",
                 response_text=quick_reply,
             )
-
-        for phrase, intent in self.direct_commands.items():
-            if phrase in text:
+        
+        # Try direct command lookup
+        direct_intent = self.command_registry.get_direct_command(text)
+        if direct_intent:
+            logger.debug(f"Direct command matched: {text}")
+            return direct_intent
+        
+        # Try press command
+        press_match = re.search(r"^press\s+([a-z0-9 ]+)$", text)
+        if press_match:
+            key = self._normalize_key_name(press_match.group(1))
+            if key:
                 return Intent(
-                    name=intent.name,
-                    params=dict(intent.params),
-                    confidence=intent.confidence,
+                    name="press_key",
+                    params={"key": key},
+                    confidence=0.96,
                     raw_text=command,
                     source="rule",
                 )
-
+        
+        # Try email intent
+        email_intent = self._parse_email_intent(text, command)
+        if email_intent:
+            return email_intent
+        
+        # Try open/launch app
         open_match = re.search(r"^(open|launch|start)\s+(.+)$", text)
         if open_match:
             app_name = self._normalize_app_name(open_match.group(2).strip())
@@ -165,7 +87,8 @@ class IntentParser:
                 raw_text=command,
                 source="rule",
             )
-
+        
+        # Try Hindi open pattern
         hindi_open_match = re.search(r"^(.+?)\s+(खोलो|खोल|चलाओ|चालू करो)$", text)
         if hindi_open_match:
             app_name = self._normalize_app_name(hindi_open_match.group(1).strip())
@@ -176,7 +99,8 @@ class IntentParser:
                 raw_text=command,
                 source="rule",
             )
-
+        
+        # Try search command
         search_match = re.search(r"^(search|google)\s+(.+)$", text)
         if search_match:
             return Intent(
@@ -186,7 +110,8 @@ class IntentParser:
                 raw_text=command,
                 source="rule",
             )
-
+        
+        # Try YouTube search
         youtube_search_match = re.search(r"^(search youtube for|play)\s+(.+)$", text)
         if youtube_search_match:
             return Intent(
@@ -196,11 +121,13 @@ class IntentParser:
                 raw_text=command,
                 source="rule",
             )
-
+        
+        # Try math intent
         calc_intent = self._parse_math_intent(text, command)
         if calc_intent:
             return calc_intent
-
+        
+        # Try system info query
         if self._is_system_info_query(text):
             return Intent(
                 name="system_info",
@@ -208,27 +135,30 @@ class IntentParser:
                 raw_text=command,
                 source="rule",
             )
-
+        
+        # Try model switching
         model_switch_intent = self._parse_model_switch(text, command)
         if model_switch_intent:
             return model_switch_intent
-
-        model_intent = self.model_router.infer_intent(
-            command,
-            context={
-                "active_app": self.state.context.active_app or "",
-                "last_command": self.state.context.last_command,
-                "last_intent": self.state.context.last_intent,
-                "last_action": self.state.context.last_action,
-                "last_result": self.state.context.last_result,
-                "primary_language": self.state.primary_language,
-            },
-        )
+        
+        # Fall back to model inference with context
+        logger.debug(f"Using model inference for: {text}")
+        context = {
+            "active_app": self.state.context.active_app or "",
+            "last_command": self.state.context.last_command,
+            "last_intent": self.state.context.last_intent,
+            "last_action": self.state.context.last_action,
+            "last_result": self.state.context.last_result,
+            "primary_language": self.state.primary_language,
+        }
+        
+        model_intent = self.model_router.infer_intent(command, context=context)
+        
+        # Normalize app name if it's an open_app intent
         if model_intent.name == "open_app":
-            model_intent.params["app_name"] = self._normalize_app_name(
-                model_intent.params.get("app_name", "")
-            )
-        model_intent.raw_text = command
+            app_name = model_intent.params.get("app_name", "")
+            model_intent.params["app_name"] = self._normalize_app_name(app_name)
+        
         return model_intent
 
     def _parse_math_intent(self, text: str, raw_command: str) -> Intent | None:
@@ -304,14 +234,16 @@ class IntentParser:
         return any(pattern in text for pattern in patterns)
 
     def _parse_model_switch(self, text: str, raw_command: str) -> Intent | None:
+        """Parse AI model switching commands"""
         patterns = {
-            "private": [
+            "local": [
                 "switch to local",
                 "go local",
                 "use local ai",
                 "use local model",
                 "switch to llama",
                 "use llama",
+                "switch to private",
             ],
             "gemini": [
                 "switch to gemini",
@@ -345,20 +277,83 @@ class IntentParser:
 
         return None
 
+    def _parse_email_intent(self, text: str, raw_command: str) -> Intent | None:
+        email_match = re.search(
+            r"([\w.+-]+\s*@\s*[\w.-]+\s*\.\s*[a-z]{2,})",
+            text,
+        )
+        if not email_match:
+            return None
+
+        if not any(word in text for word in ["email", "mail", "gmail", "send", "compose", "draft"]):
+            return None
+
+        recipient = self._normalize_email_address(email_match.group(1))
+        before_email = text[:email_match.start()].strip(" ,.-")
+        after_email = text[email_match.end():].strip(" ,.-")
+
+        body = ""
+        body_patterns = [
+            r"(?:write this|saying|that|body|message)\s+(.+?)(?:\s+(?:and\s+)?(?:send|mail|email)\s+(?:it\s+)?(?:to|for)\s*$|$)",
+            r"(?:send|mail|email)\s+(.+?)\s+(?:to|for)\s*$",
+        ]
+        for pattern in body_patterns:
+            match = re.search(pattern, before_email)
+            if match:
+                body = match.group(1).strip(" ,.-")
+                break
+
+        if not body and after_email:
+            after_match = re.search(r"^(?:saying|that|body|message)\s+(.+)$", after_email)
+            if after_match:
+                body = after_match.group(1).strip(" ,.-")
+
+        subject = "Draft from VOXIS"
+        subject_match = re.search(r"subject\s+(.+?)(?:\s+body\s+|\s+message\s+|$)", text)
+        if subject_match:
+            subject = subject_match.group(1).strip(" ,.-")
+
+        return Intent(
+            name="compose_email",
+            params={"to": recipient, "subject": subject, "body": body},
+            confidence=0.9,
+            raw_text=raw_command,
+            source="rule",
+        )
+
     def _normalize_app_name(self, app_name: str) -> str:
+        """Normalize app name using aliases and registry"""
         cleaned = app_name.strip().lower()
-        for alias, canonical in self.app_aliases.items():
-            if alias.lower() == cleaned:
-                return canonical
+        
+        # Try registry alias resolution
+        resolved = self.command_registry.resolve_app_alias(cleaned)
+        if resolved:
+            return resolved
+        
         return cleaned
 
-    def _quick_reply(self, text: str) -> str:
-        if text in self.quick_replies:
-            return self.quick_replies[text]
+    def _normalize_key_name(self, key_name: str) -> str:
+        cleaned = key_name.strip().lower()
+        aliases = {
+            "enter": "enter",
+            "return": "enter",
+            "tab": "tab",
+            "escape": "esc",
+            "esc": "esc",
+            "backspace": "backspace",
+            "delete": "delete",
+            "space": "space",
+            "up": "up",
+            "down": "down",
+            "left": "left",
+            "right": "right",
+            "page up": "pageup",
+            "page down": "pagedown",
+            "home": "home",
+            "end": "end",
+        }
+        return aliases.get(cleaned, "")
 
-        if len(text.split()) <= 4:
-            for phrase, reply in self.quick_replies.items():
-                if text.startswith(phrase) or phrase in text:
-                    return reply
-
-        return ""
+    def _normalize_email_address(self, email: str) -> str:
+        """Normalize email address"""
+        return re.sub(r"\s+", "", email.strip().lower())

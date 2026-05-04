@@ -125,14 +125,14 @@ class GestureEngine:
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         print("VOXIS Gesture Engine - ACTIVE")
-        print("🖐️  Open palm     → Activate/Deactivate")
-        print("☝️  One finger    → Move cursor")
-        print("🤏 Pinch          → Click")
-        print("🤏 Pinch+drag     → Select text")
-        print("✌️  Two fingers   → Scroll")
-        print("🤟 Three fingers  → Screenshot")
-        print("✊ Fist           → Play/Pause")
-        print("Press ESC        → Quit")
+        print("Open palm     -> Activate/Deactivate")
+        print("One finger    -> Move cursor")
+        print("Pinch         -> Click")
+        print("Pinch+drag    -> Select text")
+        print("Two fingers   -> Scroll")
+        print("Three fingers -> Screenshot")
+        print("Fist          -> Play/Pause")
+        print("Press ESC     -> Quit")
 
         while True:
             success, frame = cap.read()
@@ -154,7 +154,7 @@ class GestureEngine:
                 if self.is_active:
                     if current_time - self.last_hand_time > self.auto_deactivate_timeout:
                         self.is_active = False
-                        print("⚫ Auto deactivated — no hand detected")
+                        print("Auto deactivated: no hand detected")
                         # Release drag if active
                         if self.is_dragging:
                             pyautogui.mouseUp()
@@ -201,7 +201,7 @@ class GestureEngine:
                     smooth_y = self.prev_y + (screen_y - self.prev_y) / self.smoothing
                     self.prev_x, self.prev_y = smooth_x, smooth_y
 
-                    # PALM TOGGLE — works in both modes
+                    # Palm toggle works in both modes.
                     if gesture == "OPEN_PALM":
                         if self.palm_start_time == 0:
                             self.palm_start_time = current_time
@@ -228,9 +228,9 @@ class GestureEngine:
                             self.last_toggle_time = current_time
                             self.palm_start_time = 0
                             if self.is_active:
-                                print("🟢 Gesture control ACTIVATED")
+                                print("Gesture control ACTIVATED")
                             else:
-                                print("⚫ Gesture control DEACTIVATED")
+                                print("Gesture control DEACTIVATED")
                     else:
                         self.palm_start_time = 0
 
@@ -283,7 +283,7 @@ class GestureEngine:
                                 pyautogui.screenshot(path)
                                 self.last_gesture_time = current_time
                                 self._show_status(frame, "SCREENSHOT!", (255, 0, 255))
-                                print(f"📸 Screenshot: {path}")
+                                print(f"Screenshot: {path}")
 
                         elif gesture == "FIST":
                             if current_time - self.last_gesture_time > self.gesture_cooldown:

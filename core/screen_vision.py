@@ -24,25 +24,25 @@ class ScreenVision:
             self.types = types
             self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
             self.gemini_model = settings.GEMINI_MODEL
-            print("VOXIS Screen Vision - Initialized ✅ (Gemini)")
+            print("VOXIS Screen Vision - Initialized (Gemini)")
         except Exception:
             self.use_gemini = False
-            self.local_model = 'llava'
-            print("VOXIS Screen Vision - Initialized ✅ (Local LLaVA)")
+            self.local_model = "llava"
+            print("VOXIS Screen Vision - Initialized (Local LLaVA)")
 
     def capture(self):
-        """Take screenshot — returns bytes"""
+        """Take screenshot and return PNG bytes."""
         img = pyautogui.screenshot()
         buf = BytesIO()
-        img.save(buf, format='PNG')
+        img.save(buf, format="PNG")
         return buf.getvalue()
 
     def capture_base64(self):
-        """Take screenshot — returns base64"""
+        """Take screenshot and return base64-encoded PNG."""
         return base64.b64encode(self.capture()).decode()
 
     def see(self, question="What do you see on this screen?"):
-        """See screen — uses Gemini if available else LLaVA"""
+        """Analyze the screen with Gemini, or local LLaVA if unavailable."""
         if self.use_gemini:
             return self._see_gemini(question)
         return self._see_local(question)
@@ -63,7 +63,7 @@ class ScreenVision:
             )
             return response.text.strip()
         except Exception as e:
-            print(f"⚠️ Gemini vision unavailable → Local")
+            print(f"Gemini vision unavailable; using local vision: {e}")
             self.use_gemini = False
             return self._see_local(question)
 
@@ -72,16 +72,16 @@ class ScreenVision:
         try:
             img_data = self.capture_base64()
             response = ollama.chat(
-                model='llava',
+                model=self.local_model,
                 messages=[{
-                    'role': 'user',
-                    'content': question,
-                    'images': [img_data]
+                    "role": "user",
+                    "content": question,
+                    "images": [img_data]
                 }]
             )
-            return response['message']['content']
+            return response["message"]["content"]
         except Exception as e:
-            print(f"⚠️ Vision unavailable")
+            print(f"Vision unavailable: {e}")
             return "I cannot see the screen right now."
 
     def summarize_screen(self):
@@ -108,10 +108,11 @@ class ScreenVision:
         """List all open apps/windows"""
         return self.see(
             "List all open applications and windows "
-            "vi sible on this screen."
+            "visible on this screen."
         )
 
 if __name__ == "__main__":
     vision = ScreenVision()
     print("\nTesting screen vision...")
     print(vision.summarize_screen()) 
+  

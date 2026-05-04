@@ -17,6 +17,9 @@ __pycache__/
 
 # OS files
 .DS_Store
-Thumbs.dbconfig/settings.py
+Thumbs.db
 config/settings.py
-config/settings.py
+
+# Local speech models
+models/vosk-model*/
+models/*.zip

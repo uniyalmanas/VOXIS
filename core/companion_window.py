@@ -2,17 +2,22 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import ttk
+from typing import Callable
 
 
 class CompanionWindow:
     def __init__(self):
         self._events: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._command_handler: Callable[[str], None] | None = None
         self._thread = threading.Thread(
             target=self._run,
             daemon=True,
             name="VoxisUI",
         )
         self._thread.start()
+
+    def set_command_handler(self, handler: Callable[[str], None]) -> None:
+        self._command_handler = handler
 
     def set_status(self, text: str) -> None:
         self._events.put(("status", text))
@@ -104,6 +109,35 @@ class CompanionWindow:
         self._transcript.tag_configure("assistant", foreground="#a7f3d0")
         self._transcript.tag_configure("label", font=("Segoe UI Semibold", 10))
 
+        input_row = tk.Frame(frame, bg="#0f172a")
+        input_row.pack(fill="x", pady=(10, 0))
+
+        self._input_var = tk.StringVar(value="")
+        entry = tk.Entry(
+            input_row,
+            textvariable=self._input_var,
+            bg="#020617",
+            fg="#e5e7eb",
+            insertbackground="#e5e7eb",
+            relief="flat",
+            font=("Segoe UI", 10),
+        )
+        entry.pack(side="left", fill="x", expand=True, ipady=7)
+        entry.bind("<Return>", lambda _event: self._submit_chat())
+
+        tk.Button(
+            input_row,
+            text="Send",
+            command=self._submit_chat,
+            bg="#2563eb",
+            fg="#ffffff",
+            activebackground="#1d4ed8",
+            activeforeground="#ffffff",
+            relief="flat",
+            font=("Segoe UI Semibold", 9),
+            padx=10,
+        ).pack(side="right", padx=(8, 0), ipady=4)
+
         root.after(120, self._drain_events, root)
         root.mainloop()
 
@@ -132,3 +166,21 @@ class CompanionWindow:
         self._transcript.insert("end", f"{text}\n\n", (tag,))
         self._transcript.see("end")
         self._transcript.configure(state="disabled")
+
+    def _submit_chat(self) -> None:
+        text = self._input_var.get().strip()
+        if not text:
+            return
+
+        self._input_var.set("")
+
+        if self._command_handler is None:
+            self.set_status("Command handler unavailable")
+            return
+
+        threading.Thread(
+            target=self._command_handler,
+            args=(text,),
+            daemon=True,
+            name="VoxisChatCommand",
+        ).start()

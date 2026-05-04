@@ -36,6 +36,7 @@ Respond in one of two ways:
 
 Available actions:
 - open_app: {"app_name": "name"}
+- compose_email: {"to": "person@example.com", "subject": "subject", "body": "draft body"}
 - search_web: {"query": "text", "platform": "google/youtube"}
 - calculate: {"expression": "23 + 45"}
 - switch_model: {"mode": "auto/private/gemini/groq"}
@@ -43,6 +44,8 @@ Available actions:
 - mute
 - scroll: {"amount": 5}
 - hotkey: {"keys": ["ctrl", "t"]}
+- press_key: {"key": "enter"}
+- type_text: {"text": "text to type"}
 - take_screenshot
 - read_screen
 - switch_language: {"primary": "hi-IN", "fallback": "en-IN", "name": "Hindi"}
@@ -51,6 +54,7 @@ Available actions:
 
 Rules:
 - When the user asks for a computer action, output JSON only.
+- For email requests, prepare drafts with compose_email; do not claim the email was sent.
 - Use the provided desktop context for follow-up commands.
 - Reply in the user's active language when speaking naturally.
 - Be concise and practical.
@@ -152,7 +156,9 @@ Rules:
         return messages
 
     def _think_groq(self, command, context=None, history=None, allow_fallback=True):
+        """Try Groq with automatic fallback to local on network error"""
         try:
+            print(f"[AIBrain] Trying Groq...")
             messages = self._build_messages(command, context=context, history=history)
             response = self.groq_client.chat.completions.create(
                 model=getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile"),
@@ -160,16 +166,30 @@ Rules:
                 max_tokens=150,
                 temperature=0.1,
             )
+            print(f"[AIBrain] Groq succeeded")
             return response.choices[0].message.content.strip()
         except Exception as exc:
-            print(f"Groq unavailable: {exc}")
+            error_msg = str(exc).lower()
+            print(f"[AIBrain] Groq unavailable: {exc}")
+            
             if allow_fallback:
-                print("Groq unavailable -> Gemini")
+                # Network errors -> try local first (offline-friendly)
+                if any(term in error_msg for term in ["connection", "timeout", "network", "11001"]):
+                    print(f"[AIBrain] Network error detected -> trying Local AI")
+                    local_response = self._think_local(command, context=context, history=history, allow_fallback=False)
+                    if not local_response.startswith('{"action": "respond"') or "unavailable" not in local_response:
+                        return local_response
+                
+                # Other errors -> try Gemini
+                print(f"[AIBrain] Groq unavailable -> trying Gemini")
                 return self._think_gemini(command, context=context, history=history, allow_fallback=False)
-            return '{"action": "respond", "params": {"text": "Groq is unavailable right now."}}'
+            
+            return '{"action": "respond", "params": {"text": "All AI models are unavailable right now."}}'
 
     def _think_gemini(self, command, context=None, history=None, allow_fallback=True):
+        """Try Gemini with automatic fallback to local on network error"""
         try:
+            print(f"[AIBrain] Trying Gemini...")
             prompt_parts = [self.system_prompt]
             if context:
                 prompt_parts.append(
@@ -194,16 +214,30 @@ Rules:
                 model=getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash"),
                 contents="\n\n".join(prompt_parts),
             )
+            print(f"[AIBrain] Gemini succeeded")
             return response.text.strip()
         except Exception as exc:
-            print(f"Gemini unavailable: {exc}")
+            error_msg = str(exc).lower()
+            print(f"[AIBrain] Gemini unavailable: {exc}")
+            
             if allow_fallback:
-                print("Gemini unavailable -> Groq")
+                # Network errors -> try local first
+                if any(term in error_msg for term in ["connection", "timeout", "network", "11001", "getaddrinfo"]):
+                    print(f"[AIBrain] Network error detected -> trying Local AI")
+                    local_response = self._think_local(command, context=context, history=history, allow_fallback=False)
+                    if not local_response.startswith('{"action": "respond"') or "unavailable" not in local_response:
+                        return local_response
+                
+                # Other errors -> try Groq as last resort
+                print(f"[AIBrain] Gemini unavailable -> trying Groq")
                 return self._think_groq(command, context=context, history=history, allow_fallback=False)
-            return '{"action": "respond", "params": {"text": "Gemini is unavailable right now."}}'
+            
+            return '{"action": "respond", "params": {"text": "All AI models are unavailable right now."}}'
 
     def _think_local(self, command, context=None, history=None, allow_fallback=True):
+        """Try local Ollama with graceful error handling"""
         try:
+            print(f"[AIBrain] Trying Local AI...")
             if not self._check_local_available():
                 raise RuntimeError(self.local_status)
             messages = self._build_messages(command, context=context, history=history)
@@ -212,36 +246,40 @@ Rules:
                 messages=messages,
             )
             self.local_status = "available"
+            print(f"[AIBrain] Local AI succeeded")
             return response["message"]["content"].strip()
         except Exception as exc:
-            print(f"Local unavailable: {exc}")
+            print(f"[AIBrain] Local unavailable: {exc}")
             if allow_fallback:
-                print("Local unavailable -> Groq")
+                print(f"[AIBrain] Local unavailable -> trying Groq")
                 return self._think_groq(command, context=context, history=history, allow_fallback=True)
-            return '{"action": "respond", "params": {"text": "Local AI is unavailable right now."}}'
+            return '{"action": "respond", "params": {"text": "Local AI is unavailable. Please check your Ollama installation."}}'
 
     def think(self, command, context=None, history=None):
+        """
+        Think about a command using the best available AI model.
+        Automatic fallback chain:
+        1. Try selected model (auto-picked or user-set)
+        2. If network error -> try Local AI
+        3. If local unavailable -> try other cloud models
+        """
         try:
             model = self._normalize_mode(self._pick_model(command))
+            print(f"[AIBrain] Selected model: {model}")
 
             if model in {"groq", "speed"}:
-                reply = self._think_groq(command, context=context, history=history)
+                reply = self._think_groq(command, context=context, history=history, allow_fallback=True)
             elif model == "gemini":
-                reply = self._think_gemini(command, context=context, history=history)
-            else:
-                reply = self._think_local(
-                    command,
-                    context=context,
-                    history=history,
-                    allow_fallback=(model != "local"),
-                )
+                reply = self._think_gemini(command, context=context, history=history, allow_fallback=True)
+            else:  # "local" or unknown
+                reply = self._think_local(command, context=context, history=history, allow_fallback=True)
 
             self.conversation_history.append({"role": "user", "content": command})
             self.conversation_history.append({"role": "assistant", "content": reply})
             return reply
         except Exception as exc:
-            print(f"AI Brain Error: {exc}")
-            return '{"action": "respond", "params": {"text": "I hit an AI routing error."}}'
+            print(f"[AIBrain] Fatal error: {exc}")
+            return '{"action": "respond", "params": {"text": "I encountered an error processing your command."}}'
 
     def set_mode(self, mode):
         normalized = self._normalize_mode(mode)

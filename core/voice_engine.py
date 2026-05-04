@@ -143,7 +143,7 @@ class VoiceEngine:
         self.microphone = sr.Microphone()
         with self.microphone as source:
             self.recognizer.adjust_for_ambient_noise(source, duration=1)
-        print("Microphone calibrated ✅")
+        print("Microphone calibrated")
 
         self.speaker = pyttsx3.init()
         self.speaker.setProperty('rate', 175)
@@ -161,7 +161,7 @@ class VoiceEngine:
         self.primary_language = settings.PRIMARY_LANGUAGE
         self.fallback_language = settings.FALLBACK_LANGUAGE
 
-        print(f"Language: {self.primary_language} → {self.fallback_language}")
+        print(f"Language: {self.primary_language} -> {self.fallback_language}")
         print("VOXIS Voice Engine - Initialized")
 
     def _take_screenshot(self):
@@ -175,7 +175,7 @@ class VoiceEngine:
 
     def _get_vision(self):
         if self.vision is None:
-            print("Loading screen vision... 👁️")
+            print("Loading screen vision...")
             self.vision = ScreenVision()
         return self.vision
 
@@ -222,7 +222,7 @@ class VoiceEngine:
         except sr.UnknownValueError:
             return ""
         except sr.RequestError:
-            print("⚠️ Speech API unavailable")
+            print("Speech API unavailable")
             return ""
         except KeyboardInterrupt:
             raise
@@ -327,15 +327,15 @@ class VoiceEngine:
             self.speak("Sorry, I didn't understand that")
 
     def process_command(self, command):
-        # Layer 1 — fast commands
+        # Layer 1 - fast commands.
         for key in self.FAST_COMMANDS:
             if key in command:
-                print(f"Fast executing: {key} ⚡")
+                print(f"Fast executing: {key}")
                 self.FAST_COMMANDS[key](self)
                 return
 
-        # Layer 2 — AI brain
-        print(f"Thinking... 🧠")
+        # Layer 2 - AI brain.
+        print("Thinking...")
         response = self.brain.think(command)
 
         try:
@@ -419,7 +419,7 @@ class VoiceEngine:
         self.primary_language = primary
         self.fallback_language = fallback
         self.speak(f"Switched to {name} mode")
-        print(f"Language: {primary} ✅")
+        print(f"Language: {primary}")
 if __name__ == "__main__":
     engine = VoiceEngine()
     engine.run()

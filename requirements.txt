@@ -1,0 +1,11 @@
+google-genai
+groq
+mediapipe
+numpy
+ollama
+opencv-python
+pyaudio
+pyautogui
+pyttsx3
+SpeechRecognition
+vosk

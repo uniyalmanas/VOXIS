@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import re
 import sys
 import threading
 import time
@@ -24,7 +25,7 @@ class VoiceEngine:
         self.primary_language = settings.PRIMARY_LANGUAGE
         self.fallback_language = settings.FALLBACK_LANGUAGE
 
-        # ✅ RESTORED (FIXES YOUR CRASH)
+        # Wake words used by the live conversation loop.
         self.wake_words = [
             "jarvis",
             "जार्विस",
@@ -51,11 +52,13 @@ class VoiceEngine:
         self.speaker.set_language(self.primary_language)
 
         self.orchestrator = VoiceOrchestrator(self)
+        self.ui.set_command_handler(self.process_command)
 
         self.follow_up_prompts = {
             "en": "I'm listening.",
             "hi": "Main sun raha hoon.",
         }
+        self.require_wake_word = getattr(settings, "REQUIRE_WAKE_WORD", True)
         self._speech_lock = threading.RLock()
         self._last_speech_finished_ts = 0.0
         self._post_speech_pause_seconds = 0.25
@@ -67,23 +70,37 @@ class VoiceEngine:
         self.ui.set_mode(getattr(self.orchestrator.parser.model_router.brain, "mode", "auto"))
         self.ui.set_language(self.primary_language)
 
-    # 🔥 Robust wake detection (FIXED)
+    # Robust wake detection.
     def is_wake_word(self, audio: str) -> bool:
         if not audio:
             return False
 
-        audio = audio.lower()
-
-        triggers = [
+        triggers = {
             "jarvis",
-            "jar",
             "jarv",
+            "hey jar",
+            "jervis",
+            "service",
+            "hey jarvis",
             "voxis",
+            "vox is",
             "वॉक्सिस",
-            "जार्विस"
-        ]
+            "जार्विस",
+            "हे जार्विस",
+            "अरे जार्विस",
+        }
 
-        return any(trigger in audio for trigger in triggers)
+        normalized = audio.lower().strip()
+        words = set(re.findall(r"[\w']+", normalized))
+
+        if words.intersection(triggers):
+            return True
+
+        return any(
+            trigger in normalized
+            for trigger in triggers
+            if " " in trigger or not trigger.isascii()
+        )
 
     def resolve_code_path(self) -> str:
         candidates = [
@@ -120,14 +137,14 @@ class VoiceEngine:
                 self._last_speech_finished_ts = time.time()
                 self.orchestrator.state.is_listening = True
     
-    def listen(self) -> str:
+    def listen(self, timeout: float | None = None, phrase_time_limit: float | None = None) -> str:
         if not self.orchestrator.state.is_listening:
             return ""
 
         if time.time() - self._last_speech_finished_ts < self._post_speech_pause_seconds:
             return ""
 
-        return self.listener.listen()
+        return self.listener.listen(timeout=timeout, phrase_time_limit=phrase_time_limit)
 
     def set_languages(self, primary: str, fallback: str) -> None:
         self.primary_language = primary
@@ -164,20 +181,36 @@ class VoiceEngine:
             return self.follow_up_prompts["hi"]
         return self.follow_up_prompts["en"]
 
-    def _start_live_session(self) -> None:
+    def _start_live_session(self, prompt: bool = True) -> None:
         print("[voice] wake word detected")
         self.orchestrator.activate_conversation()
         self.ui.set_status("Live conversation active")
-        self.speak("Yes?")
+        if prompt:
+            self.speak("Yes?")
 
-    # 🔥 FIXED extraction (no dependency issues)
+    # Extract an inline command from input that includes the wake word.
     def _extract_command_after_wake(self, audio: str) -> str:
         if not audio:
             return ""
 
         lowered = audio.lower()
 
-        for trigger in ["jarvis", "jar", "jarv", "voxis"]:
+        triggers = [
+            "hey jarvis",
+            "jarvis",
+            "hey jar",
+            "jervis",
+            "service",
+            "jarv",
+            "voxis",
+            "vox is",
+            "हे जार्विस",
+            "अरे जार्विस",
+            "जार्विस",
+            "वॉक्सिस",
+        ]
+
+        for trigger in triggers:
             if trigger in lowered:
                 return lowered.replace(trigger, "", 1).strip(" ,.-")
 
@@ -193,14 +226,17 @@ class VoiceEngine:
     def run(self) -> None:
         self.speak("VOXIS is ready")
 
-        print("Say 'Jarvis' to activate live mode")
+        if self.require_wake_word:
+            print("Say 'Jarvis' to activate live mode")
+        else:
+            print("Wake-free mode active. Speak a command directly.")
         print(f"Languages: {self.primary_language} + {self.fallback_language}")
 
-        self.ui.set_status("Listening for wake word")
+        self.ui.set_status("Listening" if not self.require_wake_word else "Listening for wake word")
 
         while True:
             print("[voice] listening...")
-            audio = self.listen()
+            audio = self.listen(timeout=3.5, phrase_time_limit=6)
 
             if audio:
                 print(f"[voice] heard: '{audio}'")
@@ -208,11 +244,10 @@ class VoiceEngine:
             else:
                 print("[voice] no input detected")
 
-            # 🔥 FIXED wake detection
+            # Wake detection.
             if audio and self.is_wake_word(audio):
-                self._start_live_session()
-
                 inline_command = self._extract_command_after_wake(audio)
+                self._start_live_session(prompt=not inline_command)
                 if inline_command:
                     self._handle_live_turn(inline_command)
 
@@ -226,7 +261,11 @@ class VoiceEngine:
                     time.sleep(0.1)
                 continue
 
-            self.ui.set_status("Listening for wake word")
+            if audio and not self.require_wake_word:
+                self._handle_live_turn(audio)
+                continue
+
+            self.ui.set_status("Listening for wake word" if self.require_wake_word else "Listening")
             time.sleep(0.1)
 
 

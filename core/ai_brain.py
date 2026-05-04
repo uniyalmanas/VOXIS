@@ -25,10 +25,10 @@ class AIBrain:
 You are VOXIS, a silent AI assistant that controls a computer.
 Respond ONLY in one of two ways:
 
-1. For computer actions — pure JSON only:
+1. For computer actions - pure JSON only:
 {"action": "action_name", "params": {}}
 
-2. For conversation — natural short response
+2. For conversation - natural short response
 Maximum 2 sentences. Be warm and friendly.
 
 Available actions:
@@ -41,29 +41,29 @@ Available actions:
 - unknown
 
 Examples:
-"open youtube" → {"action": "open_app", "params": {"app_name": "youtube"}}
-"play lofi music" → {"action": "search", "params": {"query": "lofi music", "platform": "youtube"}}
-"how are you" → "I'm doing great! Ready to help."
-"YouTube khol do" → {"action": "open_app", "params": {"app_name": "youtube"}}
+"open youtube" -> {"action": "open_app", "params": {"app_name": "youtube"}}
+"play lofi music" -> {"action": "search", "params": {"query": "lofi music", "platform": "youtube"}}
+"how are you" -> "I'm doing great! Ready to help."
+"YouTube khol do" -> {"action": "open_app", "params": {"app_name": "youtube"}}
 
 CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
 """
-        print("VOXIS AI Brain - Initialized ✅")
+        print("VOXIS AI Brain - Initialized")
         print(f"Mode: {self.mode.upper()}")
 
     def _pick_model(self, command):
-        """AUTO mode — picks best model for command"""
+        """AUTO mode picks the best model for a command."""
         if self.mode != "auto":
             return self.mode
 
-        # Private keywords → always local
+        # Private keywords always use local inference.
         private_keywords = [
             "private", "secret", "personal",
             "password", "bank", "offline",
             "don't send", "local only"
         ]
 
-        # Hindi keywords → must be clearly Hindi
+        # Hindi keywords must be clearly Hindi.
         # Removed short words like "do", "de", "lo", "le"
         # that match common English words
         hindi_keywords = [
@@ -75,7 +75,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             "awaaz", "volume badha", "volume ghata"
         ]
 
-        # Complex keywords → Gemini
+        # Complex keywords use Gemini.
         complex_keywords = [
             "write", "explain", "summarize",
             "help me", "create", "generate",
@@ -85,23 +85,23 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
 
         command_lower = command.lower()
 
-        # Private → local LLaMA 3
+        # Private -> local LLaMA 3.
         if any(word in command_lower for word in private_keywords):
-            print("🔒 Private → Local LLaMA 3")
+            print("Private -> Local LLaMA 3")
             return "private"
 
-        # Hindi → Gemini
+        # Hindi -> Gemini.
         if any(word in command_lower for word in hindi_keywords):
-            print("🇮🇳 Hindi → Gemini")
+            print("Hindi -> Gemini")
             return "gemini"
 
-        # Complex → Gemini
+        # Complex -> Gemini.
         if any(word in command_lower for word in complex_keywords):
-            print("🧠 Complex → Gemini")
+            print("Complex -> Gemini")
             return "gemini"
 
-        # Default → Groq (fastest)
-        print("⚡ Groq")
+        # Default -> Groq (fastest).
+        print("Groq")
         return "groq"
 
     def _build_messages(self, command, context=None, history=None):
@@ -140,11 +140,11 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"⚠️ Groq unavailable → Local")
+            print(f"Groq unavailable -> Local: {e}")
             return self._think_local(command, context=context, history=history)
 
     def _think_gemini(self, command):
-        """Smart responses via Gemini — better Hindi"""
+        """Smart responses via Gemini, with better Hindi support."""
         try:
             full_prompt = f"{self.system_prompt}\n\nUser: {command}"
             response = self.gemini_client.models.generate_content(
@@ -153,7 +153,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             )
             return response.text.strip()
         except Exception as e:
-            print(f"⚠️ Gemini unavailable → Groq")
+            print(f"Gemini unavailable -> Groq: {e}")
             return self._think_groq(command)
 
     def _think_local(self, command):
@@ -170,11 +170,11 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             )
             return response['message']['content'].strip()
         except Exception as e:
-            print(f"⚠️ Local unavailable")
+            print(f"Local unavailable: {e}")
             return '{"action": "unknown", "params": {}}'
 
     def think(self, command):
-        """Main entry — AUTO picks best model"""
+        """Main entry; AUTO picks the best model."""
         try:
             model = self._pick_model(command)
 
@@ -197,7 +197,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
             return reply
 
         except Exception as e:
-            print(f"⚠️ AI Brain Error")
+            print(f"AI Brain Error: {e}")
             return '{"action": "unknown", "params": {}}'
 
     def set_mode(self, mode):
@@ -205,7 +205,7 @@ CRITICAL: For actions output ONLY JSON. Nothing else. No labels.
         valid_modes = ["auto", "speed", "private", "gemini"]
         if mode in valid_modes:
             self.mode = mode
-            print(f"Mode: {mode.upper()} ✅")
+            print(f"Mode: {mode.upper()}")
             return f"Switched to {mode} mode"
         return "Invalid mode"
 
